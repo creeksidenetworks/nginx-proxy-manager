@@ -87,8 +87,6 @@ services:
       OAUTH2_PROXY_OIDC_USER_CLAIM: 'upn'
       OAUTH2_PROXY_SCOPE: "openid profile email"
       # Customize
-      #OAUTH2_PROXY_BANNER: "Innosilicon USA Portal"
-      #OAUTH2_PROXY_FOOTER: "Powered by Creekside Networks 2020-2025"
       OAUTH2_PROXY_SHOW_DEBUG_ON_ERROR: true
     depends_on:
       - npm-app
