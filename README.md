@@ -61,5 +61,50 @@ docker compose down
   ```
 - Ensure all environment variables in `.env` are set and match those referenced in `docker-compose.yaml`.
 
+## OAuth2-Proxy Containers
+
+### 1. oauth2proxy (Generic Applications)
+This container provides OAuth2 authentication for general applications. It uses Azure AD for user authentication and allows any user with a valid Azure AD account to log in. The configuration uses environment variables for Azure AD client ID, secret, tenant ID, and other settings. All users with valid credentials can access the protected resources.
+
+### 2. oauth2proxy-mgt (Management Applications)
+This container is dedicated to management applications and restricts access to users who belong to a specific Azure AD group. The group object ID is set via the `MGT_AAD_GROUP_OBJECT_ID` environment variable. Only users in this group can access management resources, providing an extra layer of security for administrative functions.
+
+## Registering Applications on Azure AD
+
+1. **Log in to Azure Portal**
+   - Go to https://portal.azure.com
+   - Navigate to "Azure Active Directory" > "App registrations"
+
+2. **Register a New Application**
+   - Click "New registration"
+   - Enter a name (e.g., "NPM Generic App" or "NPM Management App")
+   - Set the redirect URI (e.g., `https://<your-auth-url>/oauth2/callback`)
+   - Click "Register"
+
+3. **Get Application (Client) ID and Tenant ID**
+   - After registration, copy the "Application (client) ID" and "Directory (tenant) ID"
+   - Add these values to your `.env` file
+
+4. **Create a Client Secret**
+   - Go to "Certificates & secrets"
+   - Click "New client secret"
+   - Copy the value and add it to your `.env` file
+
+5. **Find the Group Object ID (for Management App)**
+   - Go to "Azure Active Directory" > "Groups"
+   - Select the group you want to use for management access
+   - Copy the "Object ID" from the group overview
+   - Set this value as `MGT_AAD_GROUP_OBJECT_ID` in your `.env` file
+
+## Example .env Entries
+```
+APP_AAD_CLIENT_ID=your_generic_app_client_id
+APP_AAD_CLIENT_SECRET=your_generic_app_client_secret
+MGT_AAD_CLIENT_ID=your_management_app_client_id
+MGT_AAD_CLIENT_SECRET=your_management_app_client_secret
+AAD_TENANT_ID=your_tenant_id
+MGT_AAD_GROUP_OBJECT_ID=your_group_object_id
+```
+
 ## License
 See `LICENSE` for details.
