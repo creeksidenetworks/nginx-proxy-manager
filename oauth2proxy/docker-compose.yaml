@@ -1,0 +1,140 @@
+services:
+  npm-app:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: npm-app
+    restart: always
+    ports:
+      - '80:80'                       # Public HTTP Port
+      - '443:443'                     # Public HTTPS Port
+      - '81:81'                       # Admin Web Port
+      - '55101-55199:55101-55199'     # ETX client ports
+    environment:
+      DB_MYSQL_HOST: "npm-db"
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: "npm"
+      DB_MYSQL_PASSWORD: "npm"
+      DB_MYSQL_NAME: "npm"
+      DISABLE_IPV6: 'true'
+    volumes:
+      - ./npm/data:/data
+      - ./npm/letsencrypt:/etc/letsencrypt
+    depends_on:
+      - npm-db
+
+  npm-db:
+    image: 'mariadb:latest'
+    container_name: npm-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 'npm'
+      MYSQL_DATABASE: 'npm'
+      MYSQL_USER: 'npm'
+      MYSQL_PASSWORD: 'npm'
+    volumes:
+      - ./npm/mysql:/var/lib/mysql
+
+  redis:
+    image: docker.io/library/redis:alpine
+    container_name: oauth2-redis
+    command: --save 60 1 --loglevel warning
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - ./oauth2/redis:/data
+
+  oauth2proxy:
+    # internal: oauth2proxy on port 4180
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    container_name: oauth2proxy
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: '0.0.0.0:4180'
+      OAUTH2_PROXY_REVERSE_PROXY: true
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST: true
+      OAUTH2_PROXY_COOKIE_CSRF_EXPIRE: 5m
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: true
+      OAUTH2_PROXY_PASS_USER_HEADERS: true
+      OAUTH2_PROXY_SET_XAUTHREQUEST: true
+      #Cookies
+      OAUTH2_PROXY_COOKIE_SECRET: ${APP_COOKIE_SECRET}
+      OAUTH2_PROXY_COOKIE_NAME: ${APP_COOKIE_NAME}
+      OAUTH2_PROXY_COOKIE_SECURE: false
+      OAUTH2_PROXY_COOKIE_EXPIRE: "12h"
+      ## cookie storage at local redis
+      OAUTH2_PROXY_SESSION_STORE_TYPE: "redis"
+      OAUTH2_PROXY_REDIS_CONNECTION_URL: "redis://redis:6379"
+
+      # Required so cookie can be read on all subdomains.
+      OAUTH2_PROXY_COOKIE_DOMAINS: ${DEFAULT_DOMAIN}
+      # Required to allow redirection back to original requested target.
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ${DEFAULT_DOMAIN}
+      # Azure
+      OAUTH2_PROXY_PROVIDER: 'azure'
+      OAUTH2_PROXY_CLIENT_ID: ${APP_AAD_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${APP_AAD_CLIENT_SECRET}
+      OAUTH2_PROXY_EMAIL_DOMAINS: '*'
+      OAUTH2_PROXY_AZURE_TENANT: ${AAD_TENANT_ID}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: 'https://login.microsoftonline.com/${AAD_TENANT_ID}/v2.0'
+      OAUTH2_PROXY_REDIRECT_URL: 'https://${APP_AUTH_URL}/oauth2/callback'
+      # fix for non-email users
+      OAUTH2_PROXY_OIDC_EMAIL_CLAIM: 'upn'
+      OAUTH2_PROXY_OIDC_USER_CLAIM: 'upn'
+      OAUTH2_PROXY_SCOPE: "openid profile email"
+      # Customize
+      OAUTH2_PROXY_SHOW_DEBUG_ON_ERROR: true
+    depends_on:
+      - npm-app
+      - redis
+    restart: always
+  # management oauth2proxy  
+  oauth2proxy-mgt:
+    # internal: oauth2proxy on port 4181
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    container_name: oauth2proxy-mgt
+    environment:
+      OAUTH2_PROXY_HTTP_ADDRESS: '0.0.0.0:4181'
+      OAUTH2_PROXY_REVERSE_PROXY: true
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST: true
+      OAUTH2_PROXY_COOKIE_CSRF_EXPIRE: 5m
+      OAUTH2_PROXY_PASS_USER_HEADERS: true
+      OAUTH2_PROXY_SET_XAUTHREQUEST: true
+      #Cookies
+      OAUTH2_PROXY_COOKIE_SECRET: ${MGT_COOKIE_SECRET}
+      OAUTH2_PROXY_COOKIE_NAME: ${MGT_COOKIE_NAME}
+      OAUTH2_PROXY_COOKIE_SECURE: false
+      OAUTH2_PROXY_COOKIE_EXPIRE: "12h"
+      ## cookie storage at local redis
+      OAUTH2_PROXY_SESSION_STORE_TYPE: "redis"
+      OAUTH2_PROXY_REDIS_CONNECTION_URL: "redis://redis:6379"
+
+      # Required so cookie can be read on all subdomains.
+      OAUTH2_PROXY_COOKIE_DOMAINS: ${DEFAULT_DOMAIN}
+      # Required to allow redirection back to original requested target.
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ${DEFAULT_DOMAIN}
+      # Azure
+      OAUTH2_PROXY_PROVIDER: 'azure'
+      OAUTH2_PROXY_CLIENT_ID: ${MGT_AAD_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${MGT_AAD_CLIENT_SECRET}
+      OAUTH2_PROXY_EMAIL_DOMAINS: '*'
+      OAUTH2_PROXY_AZURE_TENANT: ${AAD_TENANT_ID}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: 'https://login.microsoftonline.com/${AAD_TENANT_ID}/v2.0'
+      OAUTH2_PROXY_REDIRECT_URL: 'https://${MGT_APP_AUTH_URL}/oauth2/callback'
+      OAUTH2_PROXY_ALLOWED_GROUPS: '${MGT_AAD_GROUP_OBJECT_ID}'  # Admins group object ID
+      #OAUTH2_PROXY_EMAIL_FIELD: userPrincipalName
+      OAUTH2_PROXY_OIDC_EMAIL_CLAIM: 'upn'
+      OAUTH2_PROXY_OIDC_USER_CLAIM: 'upn'
+      OAUTH2_PROXY_SCOPE: "openid profile email"
+      # Customize
+      # Disable login banner now
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: true
+      OAUTH2_PROXY_SHOW_DEBUG_ON_ERROR: true
+    depends_on:
+      - npm-app
+      - redis
+    restart: always
