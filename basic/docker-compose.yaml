@@ -31,7 +31,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-npm}"
       MYSQL_DATABASE: 'npm'
-      MYSQL_USER: "${MYSQL_USER:-npm}"git config --local user.name
+      MYSQL_USER: "${MYSQL_USER:-npm}"
       MYSQL_PASSWORD: "${MYSQL_PASSWORD:-npm}"
     volumes:
       - ./npm/mysql:/var/lib/mysql
